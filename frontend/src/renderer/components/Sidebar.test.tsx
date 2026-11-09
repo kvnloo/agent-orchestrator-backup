@@ -2826,6 +2826,7 @@ describe("Sidebar", () => {
 			["Rename", "R"],
 			["Pin session", "P"],
 			["Fork session", "F"],
+			["Copy session link", null],
 			["Archive session", "A"],
 		]);
 		expect(label(renameItem)).toBe("Rename");
