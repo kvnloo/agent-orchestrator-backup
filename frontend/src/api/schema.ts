@@ -10545,7 +10545,7 @@ export interface operations {
             };
         };
     };
-    clearAgentEndpoint: {
+    setAgentEndpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -10555,7 +10555,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAgentEndpointRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -10595,7 +10599,7 @@ export interface operations {
             };
         };
     };
-    setAgentEndpoint: {
+    clearAgentEndpoint: {
         parameters: {
             query?: never;
             header?: never;
@@ -10605,11 +10609,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetAgentEndpointRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
