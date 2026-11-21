@@ -5282,6 +5282,8 @@
 	"approvals.allow": "허용",
 	"approvals.preview": "미리보기",
 	"approvals.allowSite": "{{site}}에서 항상 허용",
+	"approvals.waitingFor": "{{name}}님의 승인을 기다리는 중",
+	"approvals.waitingForOwner": "세션 소유자의 승인을 기다리는 중",
 	"approvals.openSession": "세션 열기",
 	"approvals.elementAlt": "에이전트가 사용하려는 요소",
 	"approvals.region": "승인을 기다리는 에이전트 작업",

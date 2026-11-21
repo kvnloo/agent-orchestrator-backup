@@ -5429,6 +5429,8 @@
 	"approvals.allow": "Autoriser",
 	"approvals.preview": "Aperçu",
 	"approvals.allowSite": "Toujours autoriser sur {{site}}",
+	"approvals.waitingFor": "En attente de l’approbation de {{name}}",
+	"approvals.waitingForOwner": "En attente de l’approbation du propriétaire de la session",
 	"approvals.openSession": "Ouvrir la session",
 	"approvals.elementAlt": "L’élément que l’agent veut utiliser",
 	"approvals.region": "Action de l’agent en attente d’approbation",
