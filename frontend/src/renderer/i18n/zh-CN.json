@@ -5268,5 +5268,6 @@
 	"settings.approvals.logEmpty": "还没有受控操作",
 	"settings.approvals.loadFailed": "无法加载批准：{{message}}",
 	"browser.approvals.label": "操作前询问",
-	"approvals.category.script": "页面脚本"
+	"approvals.category.script": "页面脚本",
+	"approvals.category.unknown": "无法识别的命令"
 }

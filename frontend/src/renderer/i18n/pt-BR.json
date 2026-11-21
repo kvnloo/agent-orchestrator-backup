@@ -5434,5 +5434,6 @@
 	"settings.approvals.logEmpty": "Nenhuma ação controlada ainda",
 	"settings.approvals.loadFailed": "Não foi possível carregar as aprovações: {{message}}",
 	"browser.approvals.label": "Perguntar antes de agir",
-	"approvals.category.script": "Script da página"
+	"approvals.category.script": "Script da página",
+	"approvals.category.unknown": "Comando não reconhecido"
 }

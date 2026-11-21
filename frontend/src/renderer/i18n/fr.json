@@ -5434,5 +5434,6 @@
 	"settings.approvals.logEmpty": "Aucune action contrôlée pour l’instant",
 	"settings.approvals.loadFailed": "Impossible de charger les approbations : {{message}}",
 	"browser.approvals.label": "Demander avant d’agir",
-	"approvals.category.script": "Script de page"
+	"approvals.category.script": "Script de page",
+	"approvals.category.unknown": "Commande non reconnue"
 }
