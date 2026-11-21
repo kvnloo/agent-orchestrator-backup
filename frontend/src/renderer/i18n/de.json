@@ -5342,5 +5342,6 @@
 	"backgroundTasks.kind.other": "Hintergrundaufgabe",
 	"backgroundTasks.state.running": "Läuft",
 	"backgroundTasks.state.paused": "Pausiert",
-	"backgroundTasks.state.failed": "Fehlgeschlagen"
+	"backgroundTasks.state.failed": "Fehlgeschlagen",
+	"approvals.category.unknown": "Unbekannter Befehl"
 }

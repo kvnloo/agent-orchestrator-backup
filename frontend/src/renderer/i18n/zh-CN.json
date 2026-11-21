@@ -5324,5 +5324,6 @@
 	"backgroundTasks.kind.other": "后台任务",
 	"backgroundTasks.state.running": "运行中",
 	"backgroundTasks.state.paused": "已暂停",
-	"backgroundTasks.state.failed": "失败"
+	"backgroundTasks.state.failed": "失败",
+	"approvals.category.unknown": "无法识别的命令"
 }

@@ -5342,5 +5342,6 @@
 	"backgroundTasks.kind.other": "백그라운드 작업",
 	"backgroundTasks.state.running": "실행 중",
 	"backgroundTasks.state.paused": "일시 중지됨",
-	"backgroundTasks.state.failed": "실패"
+	"backgroundTasks.state.failed": "실패",
+	"approvals.category.unknown": "인식할 수 없는 명령"
 }
