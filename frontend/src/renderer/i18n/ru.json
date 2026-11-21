@@ -5823,5 +5823,6 @@
 	"device.options": "Параметры устройства",
 	"device.screenAlt": "Экран {{name}}",
 	"device.connecting": "Подключение…",
-	"device.reconnecting": "Повторное подключение…"
+	"device.reconnecting": "Повторное подключение…",
+	"approvals.category.unknown": "Нераспознанная команда"
 }
