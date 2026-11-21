@@ -5252,6 +5252,8 @@
 	"approvals.deny": "Ablehnen",
 	"approvals.allowOnce": "Einmal erlauben",
 	"approvals.allowSite": "Auf {{site}} immer erlauben",
+	"approvals.waitingFor": "Wartet auf Freigabe durch {{name}}",
+	"approvals.waitingForOwner": "Wartet auf Freigabe durch den Sitzungsinhaber",
 	"approvals.openSession": "Sitzung öffnen",
 	"approvals.elementAlt": "Das Element, das der Agent verwenden möchte",
 	"approvals.region": "Agentenaktion wartet auf Freigabe",

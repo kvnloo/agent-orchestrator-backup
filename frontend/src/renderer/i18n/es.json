@@ -5400,6 +5400,8 @@
 	"approvals.deny": "Denegar",
 	"approvals.allowOnce": "Permitir una vez",
 	"approvals.allowSite": "Permitir siempre en {{site}}",
+	"approvals.waitingFor": "Esperando a que {{name}} lo apruebe",
+	"approvals.waitingForOwner": "Esperando a que el propietario de la sesión lo apruebe",
 	"approvals.openSession": "Abrir sesión",
 	"approvals.elementAlt": "El elemento que el agente quiere usar",
 	"approvals.region": "Acción del agente pendiente de aprobación",
