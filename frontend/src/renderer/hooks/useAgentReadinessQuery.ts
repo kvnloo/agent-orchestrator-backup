@@ -101,7 +101,7 @@ export function useAgentReadinessQuery(enabled = true, hostId?: string) {
 
 /** An open local standalone view follows daemon recovery without forcing probes
  * on every poll. The daemon continues its own work after this view leaves. */
-export function useStandaloneAgentReadiness(agentId: string, pending: boolean, enabled: boolean, accountId?: string) {
+export function useStandaloneAgentReadiness(agentId: string, pending: boolean, enabled: boolean, accountId?: string, discoveryPending = pending) {
 	const queryClient = useQueryClient();
 	const [daemonGeneration, setDaemonGeneration] = useState(0);
 	const scope = useMemo(() => ({}), [agentId, accountId, enabled, daemonGeneration, queryClient]);
@@ -111,7 +111,7 @@ export function useStandaloneAgentReadiness(agentId: string, pending: boolean, e
 	const retrying = Boolean(enabled && retryRequest?.scope === scope && settledRetry !== retryRequest);
 	// A cached rejection may end `pending` before a fresh probe finishes. The
 	// explicit retry owns its lifetime until its normalized result is read.
-	const recovering = enabled && (pending || retrying);
+	const recovering = enabled && (discoveryPending || retrying);
 	const request = useMemo(() => ({}), [scope, recovering, retryRequest]);
 	const currentRequest = useRef(request);
 	currentRequest.current = request;
@@ -132,7 +132,12 @@ export function useStandaloneAgentReadiness(agentId: string, pending: boolean, e
 		).map((agent) => agent.id) ?? [];
 		let targets = agentId ? [agentId] : candidates(baseline);
 		let targetsResolved = Boolean(agentId);
-		const failedTargets = new Set<string>();
+		// A successful probe only confirms a negative result after a GET that
+		// started after it completed. An older in-flight GET is not that result.
+		const completedTargets = new Map<string, number>();
+		let readSequence = 0;
+		let reading = false;
+		let readAgain = false;
 		const installationChecking = new Set<string>();
 		const authenticationChecking = new Set<string>();
 		retryLocked.current = explicitRetry;
@@ -155,33 +160,50 @@ export function useStandaloneAgentReadiness(agentId: string, pending: boolean, e
 			setDaemonGeneration((generation) => generation + 1);
 		});
 		const read = async () => {
+			if (!isCurrent()) return;
+			if (reading) { readAgain = true; return; }
+			reading = true;
+			clearTimeout(poll);
+			const sequence = ++readSequence;
 			try {
 				const next = await fetchAgentReadiness();
 				if (isCurrent()) {
 					cacheAgentReadiness(queryClient, next);
-					for (const id of failedTargets) {
+					const settledTargets = new Set<string>();
+					for (const id of targets) {
 						const agent = next.agents.find((candidate) => candidate.id === id);
 						if (!agent) continue;
 						const previous = baseline?.agents.find((candidate) => candidate.id === id);
 						if (agent.installation.freshness === "checking") installationChecking.add(id);
 						if (agent.authentication.freshness === "checking") authenticationChecking.add(id);
-						// A failed POST does not make an old cached rejection conclusive.
+						// A failed or unfinished POST does not make an old rejection conclusive.
 						// Use daemon observation times, never the renderer's wall clock.
 						const newInstallation = installationChecking.has(id) || (baselineConfirmed && agent.installation.checkedAt !== null && agent.installation.checkedAt !== previous?.installation.checkedAt);
 						const newAuthentication = authenticationChecking.has(id) || (baselineConfirmed && agent.authentication.checkedAt !== null && agent.authentication.checkedAt !== previous?.authentication.checkedAt);
+						const completed = completedTargets.get(id);
+						const readAfterProbe = completed !== undefined && sequence > completed;
 						if (isReadyAgent(agent)
-							|| (agent.installation.state === "not_installed" && agent.installation.freshness === "fresh" && newInstallation)
-							|| (agent.installation.state === "installed" && agent.authentication.state !== "unknown" && agent.authentication.freshness === "fresh" && newAuthentication)) {
-							failedTargets.delete(id);
+							|| (agent.installation.state === "not_installed" && agent.installation.freshness === "fresh" && (newInstallation || readAfterProbe))
+							|| (agent.installation.state === "installed" && agent.authentication.state !== "unknown" && agent.authentication.freshness === "fresh" && (newAuthentication || readAfterProbe))) {
+							settledTargets.add(id);
 						}
 					}
-					if (explicitRetry && targetsResolved && failedTargets.size === 0) {
+					const ready = next.agents.some((agent) => targets.includes(agent.id) && isReadyAgent(agent));
+					if (explicitRetry && targetsResolved && (ready || (targets.length > 0 && settledTargets.size === targets.length))) {
+						active = false;
+						clearTimeout(timeout);
 						retryLocked.current = false;
 						setSettledRetry(retryRequest);
 					}
 				}
 			} catch { /* A transient transport error can recover on the next cached read. */ }
-			if (isCurrent()) poll = setTimeout(() => void read(), 2_000);
+			finally {
+				reading = false;
+				if (isCurrent()) {
+					if (readAgain) { readAgain = false; void read(); }
+					else poll = setTimeout(() => void read(), 2_000);
+				}
+			}
 		};
 		const start = async () => {
 			try {
@@ -195,12 +217,18 @@ export function useStandaloneAgentReadiness(agentId: string, pending: boolean, e
 					// Fresh profiles may have no pick while installation is unresolved.
 					targets = agentId ? [agentId] : candidates(baseline);
 					targetsResolved = Boolean(agentId) || baseline !== undefined;
+					// Poll the read-only cache independently of sequential native work.
+					// One recovered candidate must not wait for a different hung probe.
+					void read();
 					for (const target of targets) {
 						if (!isCurrent()) return;
 						try {
 							const { error, response } = await apiClient.POST("/api/v1/agents/{agent}/probe", { params: { path: { agent: target } } });
 							if (error) throw new AgentCheckError("Readiness refresh", error, response?.status);
-						} catch { failedTargets.add(target); }
+							completedTargets.set(target, readSequence);
+						} catch { /* Poll until a new daemon observation or the deadline. */ }
+						if (!isCurrent()) return;
+						void read();
 					}
 				} else {
 					const next = await ensureAgentReadiness(agentId ? [agentId] : [], "display");
@@ -208,12 +236,7 @@ export function useStandaloneAgentReadiness(agentId: string, pending: boolean, e
 				}
 			} catch { /* Cached polling still observes daemon-owned recovery. */ }
 			finally {
-				if (isCurrent()) {
-					// Do not let an earlier cached GET cancel the probe. Its final read
-					// also normalizes the legacy probe response before enabling Send.
-					if (explicitRetry) await read();
-					else retryLocked.current = false;
-				}
+				if (isCurrent() && !explicitRetry) retryLocked.current = false;
 			}
 		};
 		void start();

@@ -42,6 +42,88 @@ beforeEach(() => {
 });
 
 describe("agent readiness query", () => {
+	it.each(["ready", "timeout"])("follows remaining discovery after a confirmed failure until %s without replacing the setup action", async (outcome) => {
+		vi.useFakeTimers();
+		try {
+			const pending = { agents: [agentReadiness("codex", "Codex", { authentication: "unknown" }), agentReadiness("claude-code", "Claude Code", { authentication: "unknown" })] };
+			getMock.mockResolvedValue({ data: pending }); postMock.mockResolvedValue({ data: pending });
+			const client = new QueryClient();
+			const { result, rerender, unmount } = renderHook(({ pending }) => useStandaloneAgentReadiness("codex", pending, true, undefined, true), {
+				initialProps: { pending: true }, wrapper: wrapper(client),
+			});
+			await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+			const rejected = agentReadiness("codex", "Codex", { authentication: "unauthorized" });
+			getMock.mockResolvedValue({ data: { agents: [rejected, pending.agents[1]] } });
+			rerender({ pending: false });
+			await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+			if (outcome === "ready") {
+				getMock.mockResolvedValue({ data: { agents: [rejected, agentReadiness("claude-code", "Claude Code")] } });
+				await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+				expect(client.getQueryData(agentReadinessQueryKey)).toMatchObject({ agents: expect.arrayContaining([expect.objectContaining({ id: "claude-code", authentication: expect.objectContaining({ state: "authorized" }) })]) });
+			}
+			await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+			expect(result.current.timedOut).toBe(false);
+			expect(result.current.retrying).toBe(false);
+			expect(postMock).toHaveBeenCalledTimes(1);
+			const reads = getMock.mock.calls.length;
+			await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+			expect(getMock).toHaveBeenCalledTimes(reads);
+			unmount();
+		} finally { vi.useRealTimers(); }
+	});
+
+	it.each(["first", "second"])("unblocks a ready candidate while the %s probe is still pending", async (hanging) => {
+		vi.useFakeTimers();
+		try {
+			const pending = { agents: [agentReadiness("codex", "Codex", { authentication: "unknown" }), agentReadiness("claude-code", "Claude Code", { authentication: "unknown" })] };
+			getMock.mockResolvedValue({ data: pending }); postMock.mockResolvedValue({ data: pending });
+			const client = new QueryClient(); client.setQueryData(agentReadinessQueryKey, pending);
+			const { result, unmount } = renderHook(() => useStandaloneAgentReadiness("", true, true), { wrapper: wrapper(client) });
+			await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+			let finish!: (value: unknown) => void;
+			postMock.mockImplementation((_path, options) => options.params.path.agent === (hanging === "first" ? "codex" : "claude-code")
+				? new Promise((resolve) => { finish = resolve; }) : Promise.resolve({ data: {} }));
+			act(() => result.current.retry());
+			await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+			expect(result.current.retrying).toBe(true);
+			getMock.mockResolvedValue({ data: { agents: [agentReadiness("codex", "Codex"), pending.agents[1]] } });
+			await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+			expect(result.current.retrying).toBe(false);
+			expect(result.current.timedOut).toBe(false);
+			expect(client.getQueryData(agentReadinessQueryKey)).toMatchObject({ agents: expect.arrayContaining([expect.objectContaining({ id: "codex", authentication: expect.objectContaining({ state: "authorized" }) })]) });
+			unmount();
+			const reads = getMock.mock.calls.length;
+			await act(async () => { finish({ data: {} }); await vi.advanceTimersByTimeAsync(60_000); });
+			expect(getMock).toHaveBeenCalledTimes(reads);
+		} finally { vi.useRealTimers(); }
+	});
+
+	it("serializes cached reads and rereads after a probe completes during an older GET", async () => {
+		vi.useFakeTimers();
+		try {
+			const rejected = { agents: [agentReadiness("codex", "Codex", { authentication: "unauthorized" })] };
+			getMock.mockResolvedValue({ data: rejected });
+			const client = new QueryClient(); client.setQueryData(agentReadinessQueryKey, rejected);
+			const { result, unmount } = renderHook(() => useStandaloneAgentReadiness("codex", false, true), { wrapper: wrapper(client) });
+			let finishProbe!: (value: unknown) => void;
+			postMock.mockImplementation(() => new Promise((resolve) => { finishProbe = resolve; }));
+			act(() => result.current.retry());
+			await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+			let finishRead!: (value: unknown) => void;
+			getMock.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
+			await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+			const reads = getMock.mock.calls.length;
+			await act(async () => { finishProbe({ data: {} }); await vi.advanceTimersByTimeAsync(4_000); });
+			expect(getMock).toHaveBeenCalledTimes(reads);
+			expect(result.current.retrying).toBe(true);
+			getMock.mockResolvedValue({ data: { agents: [agentReadiness("codex", "Codex")] } });
+			await act(async () => { finishRead({ data: rejected }); await vi.advanceTimersByTimeAsync(0); });
+			expect(getMock).toHaveBeenCalledTimes(reads + 1);
+			expect(result.current.retrying).toBe(false);
+			expect(client.getQueryData(agentReadinessQueryKey)).toMatchObject({ agents: [{ authentication: { state: "authorized" } }] });
+			unmount();
+		} finally { vi.useRealTimers(); }
+	});
 	it.each(["unknown", "unauthorized"] as const)("rechecks unknown installation with %s authentication without a remembered agent", async (authentication) => {
 		vi.useFakeTimers();
 		try {

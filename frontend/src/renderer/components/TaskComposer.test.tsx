@@ -556,14 +556,24 @@ describe("TaskComposer", () => {
 
 	it.each([false, true])("keeps Send blocked for an older cached rejection (Retry expired: %s)", async (timedOut) => {
 		window.localStorage.setItem("ao.taskComposer.preferences.v1", JSON.stringify({ __standalone__: { lastAgent: "codex", agents: {} } }));
-		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", { authentication: "unauthorized" })] };
+		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", { authentication: "unauthorized" }), agentReadiness("claude-code", "Claude Code")] };
 		h.standaloneRetrying = !timedOut;
 		h.standaloneTimedOut = timedOut;
 		render(<Wrap><TaskComposer projectId="__standalone__" onCreated={vi.fn()} /></Wrap>);
 		expect(await screen.findByText(timedOut ? "Couldn’t confirm Codex is ready" : "Checking Codex…")).toBeInTheDocument();
 		expect(startTask()).toBeDisabled();
+		expect(screen.getByLabelText("Agent")).toHaveAttribute("data-value", "codex");
 		expect(screen.queryByText("Sign in to Codex to continue.")).not.toBeInTheDocument();
 		if (timedOut) expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+	});
+
+	it.each(["not_installed", "unauthorized"])("retains remembered Codex with a %s action when no ready fallback exists", async (failure) => {
+		window.localStorage.setItem("ao.taskComposer.preferences.v1", JSON.stringify({ __standalone__: { lastAgent: "codex", agents: {} } }));
+		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", failure === "not_installed" ? { installation: "not_installed" } : { authentication: "unauthorized" })] };
+		render(<Wrap><TaskComposer projectId="__standalone__" onCreated={vi.fn()} /></Wrap>);
+		expect(screen.getByLabelText("Agent")).toHaveAttribute("data-value", "codex");
+		expect(startTask()).toBeDisabled();
+		expect(await screen.findByRole("button", { name: "Open Agent Harnesses" })).toBeInTheDocument();
 	});
 
 	it("offers Retry after inconclusive startup and preserves an explicit replacement", async () => {
@@ -600,13 +610,41 @@ describe("TaskComposer", () => {
 		expect(requests[0][1].body).toMatchObject({ clientRequestId: "original-id", harness: "codex", model: "gpt-6", mode: "chat" });
 	});
 
-	it.each(["not_installed", "unauthorized"])("retains remembered Codex with an actionable %s failure", async (failure) => {
+	it.each(["not_installed", "unauthorized"])("keeps a ready fallback after remembered Codex has a confirmed %s failure", async (failure) => {
 		window.localStorage.setItem("ao.taskComposer.preferences.v1", JSON.stringify({ __standalone__: { lastAgent: "codex", agents: {} } }));
-		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", failure === "not_installed" ? { installation: "not_installed" } : { authentication: "unauthorized" }), agentReadiness("claude-code", "Claude Code")] };
-		render(<Wrap><TaskComposer projectId="__standalone__" onCreated={vi.fn()} /></Wrap>);
+		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", { authentication: "unknown" }), agentReadiness("claude-code", "Claude Code")] };
+		const client = new QueryClient();
+		const page = () => <Wrap queryClient={client}><TaskComposer projectId="__standalone__" onCreated={vi.fn()} /></Wrap>;
+		const { rerender } = render(page());
 		expect(screen.getByLabelText("Agent")).toHaveAttribute("data-value", "codex");
-		expect(startTask()).toBeDisabled();
-		expect(await screen.findByRole("button", { name: "Open Agent Harnesses" })).toBeInTheDocument();
+		fireEvent.change(task(), { target: { value: "Keep this draft" } });
+		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", failure === "not_installed" ? { installation: "not_installed" } : { authentication: "unauthorized" }), agentReadiness("claude-code", "Claude Code")] };
+		rerender(page());
+		await waitFor(() => expect(screen.getByLabelText("Agent")).toHaveAttribute("data-value", "claude-code"));
+		h.agentCatalog = { agents: [agentReadiness("codex", "Codex"), agentReadiness("claude-code", "Claude Code")] };
+		rerender(page());
+		expect(screen.getByLabelText("Agent")).toHaveAttribute("data-value", "claude-code");
+		expect(task()).toHaveValue("Keep this draft");
+		expect(h.post.mock.calls.filter(([path]) => path === "/api/v1/sessions")).toHaveLength(0);
+	});
+
+	it.each(["agent", "saved account", "default account"])("preserves an explicit %s choice after confirmed failure", async (choice) => {
+		window.localStorage.setItem("ao.taskComposer.preferences.v1", JSON.stringify({ __standalone__: { lastAgent: "codex", agents: {} } }));
+		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", { authentication: "unknown" }), agentReadiness("claude-code", "Claude Code")] };
+		const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+		client.setQueryData(["agent-accounts"], [{ id: "saved-other", provider: "codex", signedIn: false }]);
+		let launch!: ReturnType<typeof useTaskLaunch>;
+		function Launcher() { launch = useTaskLaunch({ projectId: "__standalone__" }); return null; }
+		const page = () => <Wrap queryClient={client}><Launcher /></Wrap>;
+		const { rerender } = render(page());
+		act(() => {
+			if (choice === "agent") launch.agent.onChange("codex");
+			else launch.account?.choose(choice === "saved account" ? "saved-other" : undefined);
+		});
+		h.agentCatalog = { agents: [agentReadiness("codex", "Codex", { authentication: "unauthorized" }), agentReadiness("claude-code", "Claude Code")] };
+		rerender(page());
+		expect(launch.launchSnapshot().agent).toBe("codex");
+		expect(launch.sendBlockedReason).toBe("Sign in to Codex to continue.");
 	});
 
 	it("clears the previous account's timeout when choosing a signed-in account", async () => {

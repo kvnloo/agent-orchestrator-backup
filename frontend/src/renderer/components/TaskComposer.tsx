@@ -254,6 +254,7 @@ export function useTaskLaunch({ projectId, hostId }: {
 	const [effort, setEffort] = useState("");
 	const [agent, setAgent] = useState("");
 	const [agentTouched, setAgentTouched] = useState(false);
+	const [standaloneFallback, setStandaloneFallback] = useState<{ context: string; agent: string }>();
 	const [modelTouched, setModelTouched] = useState(false);
 	const [effortTouched, setEffortTouched] = useState(false);
 	// Only a permission the user picks is sent; otherwise the project's own applies.
@@ -643,7 +644,10 @@ export function useTaskLaunch({ projectId, hostId }: {
 		availableAgents?.some((candidate) => candidate.id === rememberedAgent &&
 			(isLocalStandalone || (hostId ? isLaunchableAgent(candidate) : isReadyAgent(candidate)))),
 	);
-	const defaultWorkerAgent = rememberedAgentIsAvailable ? rememberedAgent : configuredDefaultAgent;
+	const keptFallback = isLocalStandalone && standaloneFallback?.context === preferenceContext
+		&& availableAgents?.some((candidate) => candidate.id === standaloneFallback.agent && isReadyAgent(candidate))
+		? standaloneFallback.agent : "";
+	const defaultWorkerAgent = keptFallback || (rememberedAgentIsAvailable ? rememberedAgent : configuredDefaultAgent);
 	const selectedAgent = agent || defaultWorkerAgent;
 	const selectedReadiness = agentCatalog?.agents.find((candidate) => candidate.id === selectedAgent);
 	const accountProvider = agentAccountProviderFor(selectedAgent);
@@ -659,7 +663,11 @@ export function useTaskLaunch({ projectId, hostId }: {
 	const standalonePending = isLocalStandalone && (selectedAgent
 		? !standaloneReadiness || isPendingAgent(standaloneReadiness)
 		: !agentCatalog || agentCatalog.agents.some(isPendingAgent));
-	const standaloneRecovery = useStandaloneAgentReadiness(selectedAgent, standalonePending, isLocalStandalone, accountId);
+	// A confirmed failure keeps its setup action while another candidate is
+	// still being discovered, within the same bounded cached-read cycle.
+	const standaloneDiscoveryPending = standalonePending || (isLocalStandalone && !readyFallbackAgent
+		&& Boolean(agentCatalog?.agents.some(isPendingAgent)));
+	const standaloneRecovery = useStandaloneAgentReadiness(selectedAgent, standalonePending, isLocalStandalone, accountId, standaloneDiscoveryPending);
 	const standaloneChecking = standalonePending || standaloneRecovery.retrying || standaloneRecovery.timedOut;
 	// The connection a cloud task with this agent runs on; its catalog follows it.
 	const selectedCloudConnection = isCloudProject
@@ -1434,20 +1442,35 @@ export function useTaskLaunch({ projectId, hostId }: {
 			? launch(brief, { interfaceMode: isChatOnlyAgent(selectedAgent) ? "chat" : undefined, approvalMode: "bypass-permissions", clientRequestId, attachments: files })
 			: launch(brief, { interfaceMode: "tui", clientRequestId, attachments: files });
 
-	const changeAgent = (value: string) => {
+	const changeAgent = (value: string, explicit = true) => {
 		setError(undefined);
 		setStatus(undefined);
 		setErrorAction(undefined);
 		setBranchOverride("");
 		if (selectedAgent) agentDrafts[selectedAgent] = rememberedPreference("agent-switch");
 		setAgent(value);
-		setAgentTouched(true);
+		if (explicit) setAgentTouched(true);
 		setModel("");
 		setMode("");
 		setEffort("");
 		setModelTouched(false);
 		setEffortTouched(false);
 	};
+	useEffect(() => {
+		// Only an implicit choice may fall back. Retry/timeout can still be showing
+		// an older cached rejection, so wait for the recovery attempt to settle.
+		const confirmedFailure = standaloneReadiness?.installation.state === "not_installed"
+			? standaloneReadiness.installation.freshness === "fresh"
+			: standaloneReadiness?.installation.state === "installed"
+				&& standaloneReadiness.authentication.state === "unauthorized"
+				&& standaloneReadiness.authentication.freshness === "fresh";
+		if (!isLocalStandalone || agentTouched || isSubmitting || standaloneChecking || !confirmedFailure
+			|| !readyFallbackAgent || readyFallbackAgent === selectedAgent) return;
+		setStandaloneFallback({ context: preferenceContext, agent: readyFallbackAgent });
+		changeAgent(readyFallbackAgent, false);
+		// changeAgent parks the current per-agent choices; it is an event helper.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [agentTouched, isLocalStandalone, isSubmitting, preferenceContext, readyFallbackAgent, selectedAgent, standaloneChecking, standaloneReadiness]);
 
 	// Standalone can keep or choose a pending local agent while its separate Send
 	// gate waits for discovery. Project and remote pickers retain their policies.
@@ -1475,6 +1498,7 @@ export function useTaskLaunch({ projectId, hostId }: {
 	// A pick from the picker's other agents: that agent, with the model and effort chosen
 	// alongside it, if any. Its catalog is cached, since the picker lists its models.
 	const switchAgent = (harness: string, pick: { model?: string; effort?: string } = {}) => {
+		if (isLocalStandalone) setAgentTouched(true);
 		if (harness !== selectedAgent) changeAgent(harness);
 		if (pick.model) {
 			// Cloud's lists name models only; this computer's may name launch modes.
@@ -1550,7 +1574,13 @@ export function useTaskLaunch({ projectId, hostId }: {
 		account: accountProvider && !isCloudProject ? {
 			provider: accountProvider,
 			value: accountId,
-			choose: (id: string | undefined) => setAccountPicks((picks) => ({ ...picks, [accountProvider]: id })),
+			choose: (id: string | undefined) => {
+				if (isLocalStandalone) {
+					setAgent(selectedAgent);
+					setAgentTouched(true);
+				}
+				setAccountPicks((picks) => ({ ...picks, [accountProvider]: id }));
+			},
 		} : undefined,
 		// The interface a plain send starts in, including the Settings default.
 		effectiveInterface: (submitMode ?? settings?.defaultSessionMode ?? "tui") as "chat" | "tui",

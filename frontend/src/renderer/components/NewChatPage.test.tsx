@@ -28,7 +28,6 @@ const h = vi.hoisted(() => ({
 	errorAction: undefined as { label: string; onClick: () => void; input?: { label: string; value: string; onChange: (value: string) => void } } | undefined,
 	remoteLoadError: undefined as string | undefined,
 	remoteLoadErrorAction: undefined as { label: string; onClick: () => void } | undefined,
-	canSubmit: true,
 	replay: { agent: "codex", model: "gpt-6", effort: "high", approvalMode: undefined as string | undefined, mode: undefined as string | undefined },
 	workspace: undefined as ChatWorkspaceProps | undefined,
 	harness: "codex",
@@ -129,7 +128,6 @@ beforeEach(() => {
 	h.errorAction = undefined;
 	h.remoteLoadError = undefined;
 	h.remoteLoadErrorAction = undefined;
-	h.canSubmit = true;
 	h.replay = { agent: "codex", model: "gpt-6", effort: "high", approvalMode: undefined, mode: undefined };
 	h.workspace = undefined;
 	h.harness = "codex";

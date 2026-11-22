@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { agentReadiness } from "../src/renderer/test/agent-readiness-fixtures";
 import { installFakeAgent } from "./support/fake-bridge";
 
-for (const scenario of ["a fresh profile", "remembered Codex", "unknown installation", "a failed probe"] as const) {
+for (const scenario of ["a fresh profile", "remembered Codex", "unknown installation", "a failed probe", "another hung probe"] as const) {
 	test(`renderer: standalone Retry recovers ${scenario} without losing the draft @T0`, async ({ page }) => {
 		test.setTimeout(120_000);
 		await installFakeAgent(page, { projectId: "readiness", projectName: "Readiness", workers: [] });
@@ -13,10 +13,18 @@ for (const scenario of ["a fresh profile", "remembered Codex", "unknown installa
 		let probes = 0;
 		let reads = 0;
 		let creates = 0;
+		let otherProbes = 0;
 		let finish!: () => void;
 		const released = new Promise<void>((resolve) => { finish = resolve; });
+		let finishOther!: () => void;
+		const otherReleased = new Promise<void>((resolve) => { finishOther = resolve; });
 		await page.route("http://127.0.0.1:8080/api/v1/**", async (route) => {
 			const path = new URL(route.request().url()).pathname;
+			if (path === "/api/v1/agents/claude-code/probe") {
+				otherProbes++;
+				await otherReleased;
+				return route.fulfill({ json: { supported: true, installed: true } });
+			}
 			if (path === "/api/v1/agents/codex/probe") {
 				probes++;
 				if (scenario === "a failed probe") return route.abort("failed");
@@ -27,7 +35,8 @@ for (const scenario of ["a fresh profile", "remembered Codex", "unknown installa
 			}
 			if (path.startsWith("/api/v1/agents/readiness")) {
 				if (route.request().method() === "GET") reads++;
-				return route.fulfill({ json: { agents: [agentReadiness("codex", "Codex", { authentication, installation })] } });
+				return route.fulfill({ json: { agents: [agentReadiness("codex", "Codex", { authentication, installation }),
+					...(scenario === "another hung probe" ? [agentReadiness("claude-code", "Claude Code", { authentication: "unknown" })] : [])] } });
 			}
 			if (path === "/api/v1/settings") return route.fulfill({ json: { defaultSessionMode: "chat", chatHarnesses: ["codex"] } });
 			if (path === "/api/v1/agents/chat/permission-modes") return route.fulfill({ json: { agents: [{ agent: "codex", modes: ["default"] }] } });
@@ -67,12 +76,18 @@ for (const scenario of ["a fresh profile", "remembered Codex", "unknown installa
 			await page.clock.runFor(2_000);
 		}
 		finish();
+		if (scenario === "another hung probe") await expect.poll(() => otherProbes).toBe(1);
 		await expect(page.getByRole("status").getByText(/^Checking/)).toBeHidden({ timeout: 10_000 });
 		await expect(prompt).toHaveText("Keep my Retry draft");
 		await expect(page.getByLabel("Remove retry.png")).toBeVisible();
 		expect(creates).toBe(0);
 		await prompt.press("Enter");
 		await expect.poll(() => creates).toBe(1);
+		if (otherProbes > 0) {
+			const otherDone = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/v1/agents/claude-code/probe");
+			finishOther();
+			await otherDone;
+		}
 	});
 }
 
