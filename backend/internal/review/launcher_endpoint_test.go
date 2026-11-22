@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/harnessendpoint"
 )
 
@@ -33,5 +34,42 @@ func TestLauncherSpawnClearsCompetingClaudeCredentialsForCustomEndpoint(t *testi
 		if value, ok := env[key]; !ok || value != "" {
 			t.Fatalf("%s = %q (set=%v), want blanked beside the custom endpoint", key, value, ok)
 		}
+	}
+}
+
+// A reviewer's endpoint flags and process env come from one resolved
+// endpoint: the stored one, with the project's values for any variable it sets.
+func TestLauncherEndpointEnvAppliesProjectValues(t *testing.T) {
+	dataDir := t.TempDir()
+	if _, err := harnessendpoint.ForDataDir(dataDir).Save("codex", harnessendpoint.Input{BaseURL: "https://stored.example.com", APIKey: "sk-stored", Model: "stored-model"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	l := &agentLauncher{dataDir: dataDir}
+	spec := launchSpec()
+	spec.Harness = domain.ReviewerCodex
+	spec.ProjectEnv = map[string]string{
+		harnessendpoint.CodexBaseURLEnv: "https://project.example.com",
+		harnessendpoint.CodexAPIKeyEnv:  "sk-project",
+		"UNRELATED":                     "x",
+	}
+	env := l.endpointEnv(spec)
+	if env[harnessendpoint.CodexBaseURLEnv] != "https://project.example.com" || env[harnessendpoint.CodexAPIKeyEnv] != "sk-project" {
+		t.Fatalf("project endpoint values not applied: %v", env)
+	}
+	if env[harnessendpoint.CodexModelEnv] != "stored-model" {
+		t.Fatalf("stored model lost: %v", env)
+	}
+	if _, ok := env["UNRELATED"]; ok {
+		t.Fatalf("only endpoint variables belong in the endpoint env: %v", env)
+	}
+
+	inv := l.invocation(spec)
+	if inv.EndpointEnv[harnessendpoint.CodexBaseURLEnv] != "https://project.example.com" {
+		t.Fatalf("invocation EndpointEnv = %v", inv.EndpointEnv)
+	}
+
+	empty := &agentLauncher{dataDir: t.TempDir()}
+	if env := empty.endpointEnv(launchSpec()); env != nil {
+		t.Fatalf("no stored or project endpoint: env = %v, want nil", env)
 	}
 }
