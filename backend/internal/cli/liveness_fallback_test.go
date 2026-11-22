@@ -205,8 +205,13 @@ func TestStatusStaleWhenHiddenPIDIsNotProven(t *testing.T) {
 func TestStopShutsDownDaemonWhosePIDIsHidden(t *testing.T) {
 	cfg := setConfigEnv(t)
 	d := newFakeDaemon(t, cfg, daemonmeta.ServiceName, hiddenDaemonPID, http.StatusOK)
+	deps := hiddenPIDDeps()
+	// Join the fake's drain between reads. This Linux PID-namespace scenario
+	// also runs on Windows, where racing its deletion with a read can lock the
+	// run-file. Keep the assertions that stop waits and never removes it itself.
+	deps.Sleep = func(time.Duration) { <-d.stopped }
 
-	out, _, err := executeCLI(t, hiddenPIDDeps(), "stop", "--json")
+	out, _, err := executeCLI(t, deps, "stop", "--json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,6 +392,7 @@ func TestStopKeepsHiddenWaitWhenPIDNumberIsReused(t *testing.T) {
 	cfg := setConfigEnv(t)
 	d := newFakeDaemon(t, cfg, daemonmeta.ServiceName, hiddenDaemonPID, http.StatusOK)
 	deps := hiddenPIDDeps()
+	deps.Sleep = func(time.Duration) { <-d.stopped }
 	// Hidden until inspection has verified the daemon (its last step is
 	// /readyz); after that an unrelated process holds the same PID number.
 	var afterInspection atomic.Int32
