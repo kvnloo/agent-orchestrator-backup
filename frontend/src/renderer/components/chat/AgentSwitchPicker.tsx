@@ -64,7 +64,7 @@ export interface PendingAgentSwitch {
 	thinking?: boolean;
 	/** Run Claude Code with Ultracode: set at launch in a terminal, asked per message in chat. */
 	ultracode?: boolean;
-	/** Terminal only: where Claude Code compacts on its own, "200k" or "1m". */
+	/** Sent with the switch: Claude Code's compaction window, "200k" or "1m", or "off" for OpenCode's. */
 	autoCompactWindow?: TurnSettings["autoCompactWindow"];
 	/** The permission mode picked for the agent. Unset starts it in the chat's, or its strictest. */
 	approvalMode?: ApprovalMode;
@@ -75,9 +75,17 @@ export function switchEffort(pending: PendingAgentSwitch): string | undefined {
 	return pending.effort ?? (listsModelVariants(pending.harness) ? undefined : pending.shownEffort);
 }
 
-/** Claude Code only compacts early on its larger-window models. */
-export function compactsEarly(harness: string | undefined, model = ""): boolean {
-	return harness === "claude-code" && !/haiku|opus-4-5/.test(model);
+/** How an agent's own compaction is set: Claude Code's window, or simply on or off. */
+export type AutoCompactKind = "window" | "toggle";
+
+/**
+ * How AO can set an agent's own compaction, if it can: Claude Code's window on its larger-window
+ * models, and OpenCode's on or off in a chat (a terminal's OpenCode reads only its own config).
+ */
+export function autoCompactKind(harness: string | undefined, model = "", terminal = false): AutoCompactKind | undefined {
+	if (harness === "claude-code") return /haiku|opus-4-5/.test(model) ? undefined : "window";
+	if (!terminal && (harness === "opencode" || harness === "opencode-v2")) return "toggle";
+	return undefined;
 }
 
 /** What the chat surface passes down to turn the model control into this one. */
@@ -99,7 +107,7 @@ export interface AgentSwitchProps {
 	disabled?: boolean;
 	/** Claude Code's Ultracode: Extra High effort plus its workflows, asked for by a keyword in each message. */
 	ultracode?: { on: boolean; onChange: (on: boolean) => void };
-	/** When Claude Code compacts on its own. Applies the next time it starts. */
+	/** When the running agent compacts on its own. Applies the next time it starts. */
 	autoCompact?: AutoCompactControl;
 	/**
 	 * The agents to offer in place of the chat switch targets, for choosing one before a session exists.
@@ -240,7 +248,7 @@ export function AgentModelPicker({
 	mark?: ReactNode;
 	/** The current agent's other settings, as menu rows under its effort. */
 	extras?: ReactNode;
-	/** The running agent's auto-compact setting, shown beside Fast mode when it has both. */
+	/** The running agent's auto-compact setting, shown beside Fast mode; without one it shows disabled. */
 	autoCompact?: AutoCompactControl & { title: string };
 	onCloseAutoFocus?: (event: Event) => void;
 }) {
@@ -452,7 +460,7 @@ export function AgentModelPicker({
 		if (oneShot(id)) return t("agentSwitch.terminalOneShot", { agent: agentLabel(id) });
 		return agentSwitch.disabled ? t("agentSwitch.busy") : undefined;
 	};
-	const offersAutoCompact = compactsEarly(pending?.harness, pending?.model);
+	const pendingCompactKind = autoCompactKind(pending?.harness, pending?.model, terminal);
 	// Only while there is nothing to show yet: a reload after a pick keeps the rows in place.
 	const waiting = loading && !pending && source.efforts.length === 0 && source.fast === undefined && source.thinking === undefined;
 
@@ -489,31 +497,38 @@ export function AgentModelPicker({
 		) : null,
 	].filter(Boolean);
 	// The pending agent's auto-compact, else the running one's; a pending switch hides the running agent's extras.
-	const compact = pending
-		? offersAutoCompact
-			? { value: pending.autoCompactWindow, onChange: (value: TurnSettings["autoCompactWindow"]) => onPendingChange({ ...pending, autoCompactWindow: value }), title: t("agentSwitch.autoCompactHint") }
+	const compact: (AutoCompactControl & { title?: string }) | undefined = pending
+		? pendingCompactKind
+			? {
+				kind: pendingCompactKind,
+				value: pending.autoCompactWindow,
+				onChange: (value: TurnSettings["autoCompactWindow"]) => onPendingChange({ ...pending, autoCompactWindow: value }),
+				title: t(pendingCompactKind === "toggle" ? "agentSwitch.autoCompactHintToggle" : "agentSwitch.autoCompactHint", { agent: agentLabel(pending.harness) }),
+			}
 			: undefined
 		: autoCompact;
-	const showToggles = settable && !waiting && (source.fast !== undefined || source.thinking !== undefined);
-	// Fast mode and auto-compact share a row when the agent has both.
-	const compactBesideFast = Boolean(compact && showToggles && source.fast !== undefined);
+	// Fast mode and auto-compact are always here, in one row, so every agent's menu has the same shape;
+	// one the agent does not have is shown off and disabled.
+	const showToggles = settable && !waiting && (!modelsProblem || source.fast !== undefined || source.thinking !== undefined);
+	const notOffered = t("agentSwitch.notOffered");
 	const settingsGroups = [
 		settingsRows.length > 0 ? settingsRows : null,
 		showToggles ? (
 			<>
-				{compact && compactBesideFast ? (
-					<div className="flex items-center gap-2">
-						<ToggleRow label={t("agentSwitch.fastMode")} checked={source.fast} onChange={source.onToggleFast} className="shrink-0 gap-2" />
-						<AutoCompactChoices {...compact} className="ml-auto mr-2" />
-					</div>
-				) : (
-					<ToggleRow label={t("agentSwitch.fastMode")} checked={source.fast} onChange={source.onToggleFast} />
-				)}
+				<div className="flex items-center gap-2">
+					<ToggleRow
+						label={t("agentSwitch.fastMode")}
+						checked={source.fast ?? false}
+						onChange={source.fast === undefined ? undefined : source.onToggleFast}
+						title={source.fast === undefined ? notOffered : undefined}
+						className="shrink-0 gap-2"
+					/>
+					<AutoCompactChoices {...(compact ?? { onChange: () => {}, disabled: true, unavailable: true, title: notOffered })} className="ml-auto mr-2" />
+				</div>
 				<ToggleRow label={t("agentSwitch.thinking")} checked={source.thinking} onChange={source.onToggleThinking} />
 			</>
 		) : null,
 		extras && !pending ? extras : null,
-		compact && !compactBesideFast ? <AutoCompactRow {...compact} /> : null,
 	].filter(Boolean);
 	const settingsFooter = settingsGroups.length > 0
 		? settingsGroups.map((group, index) => <div key={index} className={DIVIDER}>{group}</div>)
@@ -811,11 +826,12 @@ function AgentRail({ agents, selected, blockedReason, onPick, onSetup, onManage 
 }
 
 /** An on/off setting the agent has, as a menu row. The row owns the switch, so a click or Enter fires once. */
-export function ToggleRow({ label, checked, onChange, className }: { label: string; checked?: boolean; onChange?: (next: boolean) => void; className?: string }) {
+export function ToggleRow({ label, checked, onChange, title, className }: { label: string; checked?: boolean; onChange?: (next: boolean) => void; title?: string; className?: string }) {
 	if (checked === undefined) return null;
 	return (
 		<OptionMenuItem
 			disabled={!onChange}
+			title={title}
 			onSelect={(event) => { event.preventDefault(); onChange?.(!checked); }}
 			className={cn("justify-between gap-4 text-xs text-foreground", className)}
 		>
@@ -1006,46 +1022,54 @@ export function ComposerErrorNotice(
 }
 
 export interface AutoCompactControl {
-	/** Unset leaves it to Claude Code. */
+	/** Claude Code's window (the default), or OpenCode's on or off. */
+	kind?: AutoCompactKind;
+	/** Unset leaves it to the agent. */
 	value?: TurnSettings["autoCompactWindow"];
 	/** The agent is working or already restarting. */
 	disabled?: boolean;
 	onChange: (value: TurnSettings["autoCompactWindow"]) => void;
 }
 
-const AUTO_COMPACT_CHOICES = [{ value: undefined, label: "Auto" }, { value: "200k", label: "200k" }, { value: "1m", label: "1M" }] as const;
+const AUTO_COMPACT_CHOICES: Record<AutoCompactKind, ReadonlyArray<{ value: TurnSettings["autoCompactWindow"]; label: string }>> = {
+	window: [{ value: undefined, label: "Auto" }, { value: "200k", label: "200k" }, { value: "1m", label: "1M" }],
+	toggle: [{ value: undefined, label: "Auto" }, { value: "off", label: "Off" }],
+};
 
-/** A menu row: where Claude Code compacts on its own. */
-export function AutoCompactRow({ title, ...control }: AutoCompactControl & { title: string }) {
+/**
+ * The agent's choices (Auto, 200k and 1M for Claude Code; Auto and Off for OpenCode) as one segmented
+ * control beside Fast mode, named for screen readers and its tooltip without a visible label, so the row fits. An agent AO cannot set it for shows
+ * only Auto, disabled. A value the agent has no choice for (another agent's window) reads as Auto.
+ */
+function AutoCompactChoices({ kind = "window", value, disabled, unavailable, onChange, title, className }: AutoCompactControl & { unavailable?: boolean; title?: string; className?: string }) {
 	const { t } = useTranslation();
+	const choices = unavailable ? AUTO_COMPACT_CHOICES[kind].slice(0, 1) : AUTO_COMPACT_CHOICES[kind];
+	const current = choices.some((choice) => choice.value === value) ? value : undefined;
 	return (
-		<div className="flex h-9 items-center gap-2 px-3 text-xs" title={title}>
-			<span className="text-muted-foreground">{t("agentSwitch.autoCompact")}</span>
-			<AutoCompactChoices {...control} className="ml-auto" />
-		</div>
-	);
-}
-
-/** Auto, 200k and 1M as one segmented control, named for screen readers even without its row label. */
-function AutoCompactChoices({ value, disabled, onChange, title, className }: AutoCompactControl & { title?: string; className?: string }) {
-	const { t } = useTranslation();
-	return (
-		<span role="radiogroup" aria-label={t("agentSwitch.autoCompact")} title={title} className={cn("flex rounded-md bg-interactive-active p-0.5 text-xs", className)}>
-			{AUTO_COMPACT_CHOICES.map((choice) => (
-				<Pressable
-					key={choice.label}
-					role="radio"
-					aria-checked={value === choice.value}
-					disabled={disabled || value === choice.value}
-					onClick={() => onChange(choice.value)}
-					className={cn(
-						"rounded px-2 py-0.5 disabled:cursor-default",
-						value === choice.value ? "bg-settings-menu text-foreground" : "text-muted-foreground hover:text-foreground",
-					)}
-				>
-					{choice.value ? choice.label : t("agentSwitch.autoCompactAuto")}
-				</Pressable>
-			))}
+		<span
+			role="radiogroup"
+			aria-label={t("agentSwitch.autoCompact")}
+			aria-disabled={unavailable || undefined}
+			title={title}
+			className={cn("flex shrink-0 text-xs", className)}
+		>
+			<span className={cn("flex rounded-md bg-interactive-active p-0.5", unavailable && "opacity-50")}>
+				{choices.map((choice) => (
+					<Pressable
+						key={choice.label}
+						role="radio"
+						aria-checked={current === choice.value}
+						disabled={disabled || current === choice.value}
+						onClick={() => onChange(choice.value)}
+						className={cn(
+							"rounded px-2 py-0.5 disabled:cursor-default",
+							current === choice.value ? "bg-settings-menu text-foreground" : "text-muted-foreground hover:text-foreground",
+						)}
+					>
+						{choice.value === undefined ? t("agentSwitch.autoCompactAuto") : choice.value === "off" ? t("agentSwitch.autoCompactOff") : choice.label}
+					</Pressable>
+				))}
+			</span>
 		</span>
 	);
 }
