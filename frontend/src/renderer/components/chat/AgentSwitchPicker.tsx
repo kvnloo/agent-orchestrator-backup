@@ -1056,6 +1056,8 @@ export interface AutoCompactControl {
 	value?: TurnSettings["autoCompactWindow"];
 	/** The agent is working or already restarting. */
 	disabled?: boolean;
+	/** The agent has not started yet, so it starts with this and nothing restarts. */
+	beforeStart?: boolean;
 	onChange: (value: TurnSettings["autoCompactWindow"]) => void;
 }
 
