@@ -435,7 +435,10 @@ export function TurnSettingsBar({
 		? {
 			...autoCompact,
 			kind: compactKind,
-			title: `${t(compactKind === "toggle" ? "agentSwitch.autoCompactHintToggle" : "agentSwitch.autoCompactHint", { agent: agentLabel(harness ?? "") })} ${t("agentSwitch.autoCompactRestarts")}`,
+			title: [
+				t(compactKind === "toggle" ? "agentSwitch.autoCompactHintToggle" : "agentSwitch.autoCompactHint", { agent: agentLabel(harness ?? "") }),
+				...(autoCompact.beforeStart ? [] : [t("agentSwitch.autoCompactRestarts")]),
+			].join(" "),
 		}
 		: undefined;
 	const pickerExtras = hasPickerExtras ? (
