@@ -20848,6 +20848,7 @@ components:
           enum:
           - 200k
           - 1m
+          - "off"
           type: string
         fastMode:
           type: boolean
@@ -23476,6 +23477,7 @@ components:
           enum:
           - 200k
           - 1m
+          - "off"
           type: string
         effort:
           maxLength: 64
