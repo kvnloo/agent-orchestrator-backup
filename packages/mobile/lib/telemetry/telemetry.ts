@@ -35,8 +35,12 @@ export type DesktopTelemetryIdentity = {
 };
 
 export type MobileTelemetry = {
-	/** Emit an allowlisted event. Unknown event names and unknown props are dropped. */
-	capture(event: MobileEventName, properties?: Record<string, unknown>): void;
+	/**
+	 * Emit an allowlisted event. Unknown event names and unknown props are
+	 * dropped. Returns whether it was handed to the SDK (false when opted out,
+	 * killed, rate-capped or still waiting on the saved preference).
+	 */
+	capture(event: MobileEventName, properties?: Record<string, unknown>): boolean;
 	/** Emit the daily-active heartbeat at most once per UTC day. */
 	active(storage?: ActiveStorage, now?: Date): Promise<void>;
 	/** Apply the paired desktop's properties and opt-out. */
@@ -138,16 +142,16 @@ export function createMobileTelemetry(
 		void client.register(context);
 	};
 
-	const capture = (event: MobileEventName, properties?: Record<string, unknown>): void => {
+	const capture = (event: MobileEventName, properties?: Record<string, unknown>): boolean => {
 		// Fail closed on the event name: an event not in the allowlist is never
 		// sent, so a typo cannot ship a bare untracked event.
-		if (blocked || identityPending || optedOut) return;
-		if (!(event in MOBILE_ALLOWLIST)) return;
+		if (blocked || identityPending || optedOut) return false;
+		if (!(event in MOBILE_ALLOWLIST)) return false;
 		// Build-time kill switch, mirroring the desktop denylist.
-		if (denied.has(event)) return;
+		if (denied.has(event)) return false;
 		// Per-name rate cap: the runaway backstop. Checked last so a legitimate
 		// event is only dropped when the name is genuinely over its window.
-		if (!allow(event)) return;
+		if (!allow(event)) return false;
 		const phoneInstallId = options.phoneInstallId?.();
 		client.capture(event, {
 			...sanitizeMobileProperties(event, properties),
@@ -159,6 +163,7 @@ export function createMobileTelemetry(
 			github_actor: githubActor,
 			$process_person_profile: false,
 		});
+		return true;
 	};
 
 	const restoreOptOut = (saved: boolean): void => {
