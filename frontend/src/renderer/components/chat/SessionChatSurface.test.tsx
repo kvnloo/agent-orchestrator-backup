@@ -110,6 +110,9 @@ const sideMocks = vi.hoisted(() => ({
 	sentOutsideTranscript: Symbol("chat.sentOutsideTranscript"),
 }));
 const stageAttachmentsMock = vi.hoisted(() => vi.fn());
+// A plain function, not a vi.fn(): mock resets must not leave the lease
+// renewal without a promise to chain on.
+const updateAttachmentLeasesMock = vi.hoisted(() => async (): Promise<string[]> => []);
 vi.mock("./IndependentSideChats", () => ({
 	useIndependentSideChats: () => ({ ...sideMocks, panel: null }),
 }));
@@ -159,6 +162,7 @@ vi.mock("../../hooks/useConversation", () => ({
 	useConversationModels: vi.fn(() => ({ models: [], loaded: true })),
 	useConversationSkills: vi.fn(() => ({ skills: [] })),
 	useStageAttachments: () => stageAttachmentsMock,
+	useAttachmentLeases: () => updateAttachmentLeasesMock,
 	useWorkspaceFilePaths: () => ({ paths: workspacePathsState.paths, truncated: false }),
 }));
 
