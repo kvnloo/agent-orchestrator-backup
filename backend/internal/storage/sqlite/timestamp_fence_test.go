@@ -120,7 +120,10 @@ func TestTimestampRepairTriggerInventory(t *testing.T) {
 	// review_run_worker_notice_pending only fires on status updates. Timestamp
 	// repair preserves notice state (TestTimestampRepairPreservesReviewDoneNotices).
 	// pr_cdc_update also watches the merge queue columns, which repair never writes.
-	const reviewed = "8334d7f191681c65126ad44e76801d29b30c1900e266f3fd58d9680f67e06761"
+	// chat_attachment_leases_commit_* fire on inserts, or on updates OF text and
+	// delivery_content_json only, so a representation-only timestamp rewrite
+	// never fires them.
+	const reviewed = "e56e7c73bcc1aebc0ef2931b063dc0bbb4ca69ab5db142da7c2d7e39f74b3684"
 	if got := fmt.Sprintf("%x", hash.Sum(nil)); got != reviewed {
 		t.Fatalf("timestamp trigger inventory changed; review preservation logic before updating fingerprint: %s", got)
 	}
