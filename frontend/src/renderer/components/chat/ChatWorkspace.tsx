@@ -120,7 +120,7 @@ import { handleTerminalTabListKeyDown } from "../../lib/terminal-tabs";
 import { agentLabel } from "../../lib/agent-options";
 import { labelForHost } from "../../lib/host-clients";
 import type { ApprovalMode } from "../../types/conversation";
-import type { ConversationLocalEcho } from "../../hooks/useConversation";
+import type { ConversationLocalEcho, UpdateAttachmentLeases } from "../../hooks/useConversation";
 import type { ShellTerminal } from "../../hooks/useShellTerminals";
 import { sidebarOccupiesLayout, useUiStore } from "../../stores/ui-store";
 import type { TerminalTarget } from "../../types/terminal";
@@ -700,6 +700,8 @@ export interface ChatWorkspaceProps {
 	 * no worktree to write into.
 	 */
 	onStageAttachments?: (attachments: OutgoingAttachment[], signal?: AbortSignal) => Promise<string[]>;
+	/** Releases or renews the leases of files staged for the draft; see ChatComposer. */
+	onUpdateAttachmentLeases?: UpdateAttachmentLeases;
 	/** Staged files are uploaded to AO Cloud, up to maxBytes each; see ChatComposer. */
 	cloudAttachments?: { maxBytes: number };
 	/** The provider negotiated native image prompt blocks. */
@@ -991,6 +993,7 @@ function ChatWorkspaceContent({
 	localEchos,
 	sendAwaitingTurn = false,
 	onStageAttachments,
+	onUpdateAttachmentLeases,
 	cloudAttachments,
 	nativeImages,
 	onSteer,
@@ -2601,6 +2604,7 @@ function ChatWorkspaceContent({
 										filePathsLoading={filePathsLoading}
 										onFileQuery={onFileQuery}
 										onStageAttachments={newWorkDisabled ? undefined : onStageAttachments}
+										onUpdateAttachmentLeases={onUpdateAttachmentLeases}
 										cloudAttachments={cloudAttachments}
 										holdAttachments={newWorkDisabled ? undefined : holdAttachments}
 										onHeldAttachmentsChange={onHeldAttachmentsChange}
