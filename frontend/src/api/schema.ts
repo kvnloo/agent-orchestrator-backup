@@ -7205,7 +7205,7 @@ export interface components {
             /** @enum {string} */
             approvalMode?: "default" | "accept-edits" | "auto" | "bypass-permissions";
             /** @enum {string} */
-            autoCompactWindow?: "200k" | "1m" | "off";
+            autoCompactWindow?: "200k" | "500k" | "1m" | "off";
             fastMode?: boolean;
             model?: string;
             planMode?: boolean;
@@ -7312,7 +7312,7 @@ export interface components {
             approvalMode?: "default" | "accept-edits" | "auto" | "bypass-permissions";
             attachments?: components["schemas"]["AttachmentInput"][];
             /** @enum {string} */
-            autoCompactWindow?: "200k" | "1m" | "off";
+            autoCompactWindow?: "200k" | "500k" | "1m" | "off";
             baseBranch?: string;
             branch?: string;
             brief: string;
@@ -8192,7 +8192,7 @@ export interface components {
         };
         ProviderSwitchRequest: {
             /** @enum {string} */
-            autoCompactWindow?: "200k" | "1m" | "off";
+            autoCompactWindow?: "200k" | "500k" | "1m" | "off";
             effort?: string;
             fastMode?: boolean;
             force?: boolean;
@@ -9373,7 +9373,7 @@ export interface components {
             async?: boolean;
             attachments?: components["schemas"]["AttachmentInput"][];
             /** @enum {string} */
-            autoCompactWindow?: "200k" | "1m" | "off";
+            autoCompactWindow?: "200k" | "500k" | "1m" | "off";
             baseBranch?: string;
             branch?: string;
             clientRequestId?: string;
