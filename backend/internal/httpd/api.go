@@ -78,12 +78,12 @@ type APIDeps struct {
 	TelemetryIdentity ports.TelemetryIdentityStore
 	// TelemetryLocal serves `ao telemetry log|status|on|off` over loopback. Nil
 	// leaves those routes unmounted.
-	TelemetryLocal *TelemetryLocal
-	LifetimeSessions  func(context.Context) (int64, error)
-	Mobile            *controllers.MobileController
-	BrowserLive       *BrowserLiveHub
-	Browser           controllers.BrowserService
-	BrowserChrome     controllers.BrowserChromeService
+	TelemetryLocal   *TelemetryLocal
+	LifetimeSessions func(context.Context) (int64, error)
+	Mobile           *controllers.MobileController
+	BrowserLive      *BrowserLiveHub
+	Browser          controllers.BrowserService
+	BrowserChrome    controllers.BrowserChromeService
 	// Panes relays split-pane requests from agents to the desktop window.
 	Panes controllers.PaneService
 	// PaneTerminals lets an agent type into and read its session's shell terminals.
