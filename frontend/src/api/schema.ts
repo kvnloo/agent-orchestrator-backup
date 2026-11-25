@@ -9930,6 +9930,7 @@ export interface components {
             cloudUserId?: string;
             distinctId: string;
             githubLogin?: string;
+            githubSignedIn?: boolean;
             installId?: string;
             isSignedIn?: null | boolean;
             lifetimeSessions?: null | number;

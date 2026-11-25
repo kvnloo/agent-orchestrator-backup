@@ -3355,13 +3355,16 @@ type RemoteHostUpdateCheckResponse struct {
 // TelemetryIdentityResponse is the body of GET /api/v1/telemetry/identity. A
 // phone paired to this desktop identifies only a signed-in AO Cloud user ID.
 // Without one, DistinctID is the desktop install ID and stays anonymous. The
-// phone honors OptedOut. This response carries no email.
+// phone honors OptedOut. This response carries no email. GitHubLogin is present
+// only when the user turned on "Include my GitHub username"; GitHubSignedIn
+// says whether a GitHub login was resolved at all, without naming it.
 type TelemetryIdentityResponse struct {
 	DistinctID       string `json:"distinctId"`
 	InstallID        string `json:"installId,omitempty"`
 	CloudUserID      string `json:"cloudUserId,omitempty"`
 	IsSignedIn       *bool  `json:"isSignedIn,omitempty"`
 	GitHubLogin      string `json:"githubLogin,omitempty"`
+	GitHubSignedIn   bool   `json:"githubSignedIn,omitempty"`
 	OptedOut         bool   `json:"optedOut"`
 	LifetimeSessions *int64 `json:"lifetimeSessions,omitempty"`
 }
