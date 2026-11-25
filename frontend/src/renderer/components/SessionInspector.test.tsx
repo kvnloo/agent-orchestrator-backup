@@ -6287,6 +6287,10 @@ describe("SessionInspector Cloud reviews", () => {
       }),
     );
 
+    // The pill's accessible name carries the agent and its status, not only the label.
+    expect(screen.getByRole("button", { name: /Select reviewer agent/ })).toHaveAccessibleName(
+      "Select reviewer agent: Cursor, Not installed",
+    );
     const install = await screen.findByRole("button", { name: "Install" });
     expect(cloudCpMock.updateSessionPreferences).not.toHaveBeenCalled();
     await userEvent.click(install);
