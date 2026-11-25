@@ -70,6 +70,10 @@ export default function SpawnScreen() {
 	// Set once a machine is picked by hand, or the one chosen for the person can
 	// be used: until then the page keeps choosing (see autoSpawnHostId).
 	const hostSettled = useRef(false);
+	// The person has edited the form (any control, typing or dictation). From
+	// then on the chosen machine stays: a move would clear their choices and
+	// send Start to a machine they never picked.
+	const formEdited = useRef(false);
 	// State, not a ref: what was typed while the saved New task draft was being
 	// read is saved as soon as the read is done (see the draft below).
 	const [draftRestored, setDraftRestored] = useState(false);
@@ -132,6 +136,12 @@ export default function SpawnScreen() {
 	// soon as it answers.
 	useEffect(() => {
 		if (hostSettled.current) return;
+		// Read here, not where the edit happened, so an edit made before any
+		// machine was chosen never leaves the page on none.
+		if (formEdited.current && selectedHostId !== null) {
+			hostSettled.current = true;
+			return;
+		}
 		// The saved draft is read first: restored, it goes back to its own machine.
 		if (!draftRestored) return;
 		const now = Date.now();
@@ -372,6 +382,7 @@ export default function SpawnScreen() {
 	// Dictation edits the form too, so it clears a dropped Start's notice.
 	const voice = useVoiceInput({ onTranscript: useCallback((spoken: string) => {
 		setError(errorAfterEdit);
+		formEdited.current = true;
 		setPrompt((old) => old ? `${old} ${spoken}` : spoken);
 	}, []) });
 	const listening = voice.state === "starting" || voice.state === "recording";
@@ -737,10 +748,7 @@ export default function SpawnScreen() {
 	// change emptying the composer) leave it.
 	const edited = <A extends unknown[]>(change: (...args: A) => void) => (...args: A) => {
 		setError(errorAfterEdit);
-		// Edited by hand, the form is the person's: the page stops choosing its
-		// machine, since a move would clear their choices and send Start
-		// elsewhere. Not before one is chosen, or it would stay on none.
-		if (selectedHostId !== null) hostSettled.current = true;
+		formEdited.current = true;
 		change(...args);
 	};
 
