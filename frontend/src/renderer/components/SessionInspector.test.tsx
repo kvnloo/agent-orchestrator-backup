@@ -6220,7 +6220,7 @@ describe("SessionInspector Cloud reviews", () => {
       sessionId: "sess-1",
       reviewerHarness: "claude-code",
       availableReviewerHarnesses: [],
-      reviews: [],
+      reviews: [{ pullRequestUrl: "https://github.com/acme/repo/pull/7", pullRequestNumber: 7, title: "PR 7", targetSha: "head-7", status: "needs_review" }],
       runs: [],
     });
 
