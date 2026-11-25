@@ -10069,6 +10069,7 @@ export interface components {
             accountId: string;
             email?: string;
             loginId?: string;
+            organizationName?: string;
             organizationUnknown?: boolean;
             plan?: string;
             /** @enum {string} */
