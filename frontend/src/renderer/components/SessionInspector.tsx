@@ -2833,6 +2833,7 @@ function ReviewPanel({
 									<CloudReviewerPicker
 										ariaLabel={t("inspector.selectReviewerAgent")}
 										credentialHarnesses={cloudReviewerHarnesses}
+										workerHarness={session.provider}
 										disabled={reviewerControlsLocked || isInstallingCloudHarness}
 										harnessStatuses={cloudHarnessStatuses}
 										onAgentChange={(harness) => onCloudReviewerHarnessChange?.(harness)}
