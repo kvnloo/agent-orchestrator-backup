@@ -21,6 +21,7 @@ var actions = map[string]struct{}{
 	"network-status": {}, "network-list": {}, "network-stop": {}, "network-clear": {},
 	"console": {}, "errors": {}, "frame": {}, "dialog": {},
 	"devtools-open": {}, "devtools-close": {}, "target": {},
+	"record-start": {}, "record-status": {}, "record-stop": {}, "record-read": {},
 }
 
 type sessionReader interface {
