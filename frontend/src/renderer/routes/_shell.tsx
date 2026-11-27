@@ -33,6 +33,7 @@ import { ShareLinkHost } from "../components/OpenShareLinkDialog";
 import { SharedArtifactLinkHost } from "../components/SharedArtifactLinkHost";
 import { KeyboardShortcutsDialog } from "../components/KeyboardShortcutsDialog";
 import { QuitConfirmDialog } from "../components/QuitConfirmDialog";
+import { ExitFeedbackPrompt } from "../components/ExitFeedbackPrompt";
 import { PageTopbar } from "../components/PageTopbar";
 import { SessionTopbarProvider } from "../components/SessionTopbarPortal";
 import { OrchestratorReplacementDialog } from "../components/OrchestratorReplacementDialog";
@@ -1672,7 +1673,10 @@ const replacementErrorCount = Object.keys(orchestratorReplacementErrors).length;
 	// ⌘Q can arrive at any time, including during startup or a daemon
 	// reconnect, so the quit confirm renders outside the readiness gate.
 	const quitConfirmDialog = (
-		<QuitConfirmDialog open={isQuitConfirmOpen} keepsRunning={quitKeepsRunning} onResolve={resolveQuitConfirm} />
+		<>
+			<QuitConfirmDialog open={isQuitConfirmOpen} keepsRunning={quitKeepsRunning} onResolve={resolveQuitConfirm} />
+			<ExitFeedbackPrompt />
+		</>
 	);
 	if (isStartupLoading) {
 		return (
