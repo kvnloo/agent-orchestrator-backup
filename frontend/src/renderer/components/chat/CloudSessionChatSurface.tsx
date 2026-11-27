@@ -57,6 +57,7 @@ import type { ApprovalModeLimits } from "./TurnSettingsBar";
 import { SharedComposerNotice } from "./SharedComposerNotice";
 import { Button } from "../ui/button";
 import { artifactAtPath } from "../../../../../packages/shared/artifacts/deliverables";
+import { cloudPullRequestAutomation } from "../../../../../packages/shared/chat/pull-request-automation";
 
 type EventPayload = {
 	attempt?: unknown;
@@ -111,6 +112,8 @@ type EventPayload = {
 	senderProjectId?: unknown;
 	senderDisplayName?: unknown;
 	displayText?: unknown;
+	/** chat.user_message with origin automation: the pull request event it reports. */
+	automation?: unknown;
 	turnId?: unknown;
 	activity?: unknown;
 	itemId?: unknown;
@@ -1333,6 +1336,8 @@ export function toSnapshot(session: WorkspaceSession, events: CloudCpClientEvent
 			const senderSessionId = automation && typeof payload.senderSessionId === "string" ? payload.senderSessionId : undefined;
 			const senderProjectId = automation && typeof payload.senderProjectId === "string" ? payload.senderProjectId : undefined;
 			const senderDisplayName = automation && typeof payload.senderDisplayName === "string" ? payload.senderDisplayName : undefined;
+			// A pull request event (failing CI, a review, merge conflicts) draws as that event.
+			const pullRequestEvent = automation ? cloudPullRequestAutomation(payload.automation) : undefined;
 			const message: ConversationMessage = {
 				kind: "message", id: `cloud-event-${event.sequence}`, sequence: event.sequence, revision: 1,
 				turnId: turnID, role: "user", origin: automation ? "automation" : "human",
@@ -1344,6 +1349,7 @@ export function toSnapshot(session: WorkspaceSession, events: CloudCpClientEvent
 				...(content ? { content } : {}),
 				senderLabel: automation && typeof payload.senderLabel === "string" ? payload.senderLabel : undefined,
 				senderSessionId, senderProjectId, senderDisplayName,
+				...(pullRequestEvent ? { pullRequestEvent } : {}),
 				...(attachments.length > 0 ? { cloudAttachments: attachments } : {}),
 				streaming: false, delivery: "accepted", createdAt: event.createdAt,
 			};
