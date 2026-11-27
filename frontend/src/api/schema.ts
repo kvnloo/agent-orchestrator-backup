@@ -10210,6 +10210,7 @@ export interface components {
             installId?: string;
             isSignedIn?: null | boolean;
             lifetimeSessions?: null | number;
+            lifetimeWorkSessions?: null | number;
             optedOut: boolean;
         };
         TerminalShellCheckResponse: {

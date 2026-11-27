@@ -28694,6 +28694,10 @@ components:
           type:
           - "null"
           - integer
+        lifetimeWorkSessions:
+          type:
+          - "null"
+          - integer
         optedOut:
           type: boolean
       required:
