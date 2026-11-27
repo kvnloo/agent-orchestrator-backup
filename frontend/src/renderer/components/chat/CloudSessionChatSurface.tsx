@@ -58,6 +58,7 @@ import { SharedComposerNotice } from "./SharedComposerNotice";
 import { Button } from "../ui/button";
 import { artifactAtPath } from "../../../../../packages/shared/artifacts/deliverables";
 import { cloudPullRequestAutomation } from "../../../../../packages/shared/chat/pull-request-automation";
+import { cloudTurnFailure } from "../../../../../packages/shared/chat/cloud-turn-failure";
 
 type EventPayload = {
 	attempt?: unknown;
@@ -1137,6 +1138,14 @@ export function toSnapshot(session: WorkspaceSession, events: CloudCpClientEvent
 			turn.completedAt = event.createdAt;
 			const error = eventPayload(event).error;
 			turn.errorMessage = typeof error === "string" ? error : undefined;
+			delete turn.usageLimit;
+			if (turn.state === "failed" && turn.errorMessage) {
+				// The agent's own words, never the worker's ACP envelope or stderr; a
+				// provider's usage limit reads as one, as in a local chat.
+				const failure = cloudTurnFailure(turn.errorMessage);
+				turn.errorMessage = failure.message || undefined;
+				if (failure.usageLimit) turn.usageLimit = { autoResume: false };
+			}
 			// No agent started on it: its prompt is loaded with no start after it
 			// (a turn starts after its prompt), or it ended at attempt 0, never
 			// claimed, which holds on a page without its prompt too.
@@ -1423,7 +1432,14 @@ export function toSnapshot(session: WorkspaceSession, events: CloudCpClientEvent
 		}
 	}
 	// A withdrawn message shows nowhere: not its bubble, its files or its edits.
-	const shownItems = withdrawnTurns.size > 0 ? items.filter((item) => !item.turnId || !withdrawnTurns.has(item.turnId)) : items;
+	// An answer that only restates its failed turn's error says it once: the
+	// turn's outcome does (Claude writes its usage-limit notice as a reply too).
+	const restatesFailure = (item: ConversationItem) => {
+		if (item.kind !== "message" || item.role !== "assistant" || !item.turnId) return false;
+		const turn = turns.get(item.turnId);
+		return turn?.state === "failed" && Boolean(turn.errorMessage) && item.text.trim() === turn.errorMessage;
+	};
+	const shownItems = items.filter((item) => (!item.turnId || !withdrawnTurns.has(item.turnId)) && !restatesFailure(item));
 	const orderedTurns = [...turns.values()];
 	// The first durable send may wait briefly for the worker to claim it. It is
 	// the active request; only later messages should appear in the queue. While

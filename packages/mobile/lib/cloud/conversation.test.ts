@@ -183,6 +183,25 @@ describe("cloud conversation projection", () => {
 		expect(snapshot.items).toEqual([expect.objectContaining({ origin: "automation", text: "CI failed on main", senderLabel: "Orchestrator" })]);
 	});
 
+	it("shows a failed ACP prompt in the agent's words, and a usage limit as one, said once", () => {
+		sequence = 0;
+		const limit = "You've hit your 5-hour limit · resets 11am (UTC)";
+		const raw = `ACP prompt: {"code":-32603,"message":"Internal error: ${limit}","data":{"errorKind":"rate_limit"}}: [session/query] sessionId=c8cf34f2 resume=none\n(node:9482) [CLAUDE_SDK_CAN_USE_TOOL_SHADOWED] Warning: canUseTool will not be invoked\n(Use \`node --trace-warnings ...\` to show where the warning was created)`;
+		const snapshot = cloudConversationSnapshot(session(), [
+			event("chat.user_message", { turnId: "t1", text: "start a review" }),
+			event("chat.turn_started", { turnId: "t1" }),
+			event("chat.assistant_delta", { turnId: "t1", itemId: "a1", text: limit }),
+			event("chat.turn_aborted", { turnId: "t1", attempt: 1, error: raw }),
+			event("chat.user_message", { turnId: "t2", text: "again" }),
+			event("chat.turn_started", { turnId: "t2" }),
+			event("chat.turn_aborted", { turnId: "t2", attempt: 1, error: "ACP prompt: peer disconnected: Error: spawn claude ENOENT\n(node:1) Warning: x" }),
+		]);
+		expect(snapshot.turns[0]).toMatchObject({ state: "failed", errorMessage: limit, usageLimit: { autoResume: false } });
+		expect(snapshot.items.some((item) => item.kind === "message" && item.role === "assistant")).toBe(false);
+		expect(snapshot.turns[1]).toMatchObject({ state: "failed", errorMessage: "peer disconnected: Error: spawn claude ENOENT" });
+		expect(snapshot.turns[1]).not.toHaveProperty("usageLimit");
+	});
+
 	it("reads the pull request event an automation message reports, and only from automation", () => {
 		sequence = 0;
 		const automation = {

@@ -14,6 +14,7 @@ import type {
 	PlanStep,
 } from "../chat/types";
 import { cloudPullRequestAutomation } from "../../../shared/chat/pull-request-automation";
+import { cloudTurnFailure } from "../../../shared/chat/cloud-turn-failure";
 import { cloudLifecycleStage } from "./lifecycle";
 import type { CloudClientEvent, CloudSession } from "./types";
 
@@ -283,6 +284,14 @@ export function cloudConversationSnapshot(session: CloudSession, events: readonl
 			turn.state = event.type === "chat.turn_completed" ? "completed" : event.type === "chat.turn_interrupted" ? "interrupted" : "failed";
 			turn.completedAt = event.createdAt;
 			turn.errorMessage = str(payload.error);
+			delete turn.usageLimit;
+			if (turn.state === "failed" && turn.errorMessage) {
+				// The agent's own words, never the worker's ACP envelope or stderr; a
+				// provider's usage limit reads as one, as in a local chat.
+				const failure = cloudTurnFailure(turn.errorMessage);
+				turn.errorMessage = failure.message || undefined;
+				if (failure.usageLimit) turn.usageLimit = { autoResume: false };
+			}
 			continue;
 		}
 		if (event.type === "chat.approval_requested") {
@@ -539,7 +548,13 @@ export function cloudConversationSnapshot(session: CloudSession, events: readonl
 							: "ready",
 		},
 		turns: ordered,
-		items,
+		// An answer that only restates its failed turn's error says it once: the
+		// turn's outcome does (Claude writes its usage-limit notice as a reply too).
+		items: items.filter((item) => {
+			if (item.kind !== "message" || item.role !== "assistant" || !item.turnId) return true;
+			const turn = turns.get(item.turnId);
+			return !(turn?.state === "failed" && turn.errorMessage && item.text.trim() === turn.errorMessage);
+		}),
 		latestSequence: events.at(-1)?.sequence ?? 0,
 		oldestSequence: events[0]?.sequence ?? 1,
 		hasMoreBefore: partial,
