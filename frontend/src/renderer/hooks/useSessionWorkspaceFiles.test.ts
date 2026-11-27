@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { markApiError, reserveException } from "../lib/reported-errors";
 import {
 	WorkspaceRequestError,
 	isMissingWorkspaceError,
@@ -170,5 +171,19 @@ describe("workspace files on selected hosts", () => {
 		await expect(sessionWorkspaceFileQueryOptions("same-id", "src/app.ts", "read failed", "combined", undefined, "offline").queryFn()).rejects.toThrow("not connected");
 		expect(localPut).not.toHaveBeenCalled();
 		expect(localGet).not.toHaveBeenCalled();
+	});
+});
+
+describe("recordWorkspaceResult", () => {
+	it("keeps API ownership so the query cache does not report the error again", () => {
+		const apiError = { code: "SESSION_WORKSPACE_NOT_FOUND", message: "Session workspace not found" };
+		markApiError(apiError);
+		const typed = recordWorkspaceResult("session-owned", undefined, apiError, new Response(null, { status: 404 }), "fallback");
+		expect(typed.code).toBe("SESSION_WORKSPACE_NOT_FOUND");
+		expect(reserveException(typed)).toBe(false);
+	});
+
+	it("still reports a failure with no API error behind it", () => {
+		expect(reserveException(recordWorkspaceResult("session-unowned", undefined, undefined, undefined, "fallback"))).toBe(true);
 	});
 });
